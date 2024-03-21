@@ -1,0 +1,24 @@
+invnorm <- function (x) {
+y = (rank(x,na.last="keep")-0.5)/sum(!is.na(x))
+return (qnorm(y))
+}
+directory <- "path/to/your/directory"  
+files <- list.files(directory, pattern = "\\.txt$", full.names = TRUE)
+out = NULL
+for (i  in 1:length(files) ) {
+	file = files[i]
+	x = read.delim (file)
+	a = summary(lm (invnorm(x[,7]) ~  x$sex + x$strain * x$cross))
+	out$file[i] = file
+	out$sex.e[i] = a$coefficients[2,1]
+	out$sex.p[i] = a$coefficients[2,4]
+	out$strain.e[i] = a$coefficients[3,1]
+	out$strain.p[i] = a$coefficients[3,4]
+	out$cross.e[i] = a$coefficients[4,1]
+	out$cross.p[i] = a$coefficients[4,4]
+	out$interaction.e[i] = a$coefficients[5,1]
+	out$interaction.p[i] = a$coefficients[5,4]
+	
+	}
+out$logp = -1*log10(out$interaction.p)
+a =   as.data.frame(out)
