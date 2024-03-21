@@ -1,0 +1,93 @@
+#!/usr/bin/perl
+use strict;
+use Getopt::Std;
+
+our ($opt_h,$opt_v, $opt_c, $opt_l, $opt_f);
+getopts("hf:vlc") ;   
+&usage if $opt_h;   
+sub usage {
+  die "RunMeta.pl  -f <fofn>
+ runs metasoft twice, second time processing the log file to acquire mean and hetero corrections
+\n";
+}
+sub SpawnProcess {
+  my ($command) = @_[0];
+  my ($option) = @_[1];
+  if ($option == 2) {
+    print "$command\n";
+  }
+  
+  else {
+    if ($option == 1) {
+      print "$command\n";
+    }
+    open(PROCESS, "$command 2>&1 |")
+      || warn "spawn couldn't open \"$command\": $!\n"
+      && return;
+    
+    my(@output)=<PROCESS>;
+       
+    close (PROCESS);
+    my $status=($? >> 8);
+    
+    if ( $status != 0 ) {
+      die " spawn \"$command\" returned non-zero exit status: @output\n";
+    }
+    
+    return (@output);
+  }
+}
+
+my $Files = {};
+open (FOFN, $opt_f) || die "Can't open file of filenames with -f option $opt_f\n";
+while (<FOFN>) {
+  chomp;
+  my @data = split;
+  $Files->{$data[0]}++;
+}
+
+my $option = 0;
+if ($opt_v) {
+  $option = 1;
+}
+if ($opt_c) {
+  $option = 2;
+}
+
+
+foreach my $ready (sort keys %{$Files}) {
+  my $out = $ready . ".out";
+   my $log = $ready . ".log";
+  my $command = "java -jar Metasoft.jar -input  $ready -mvalue -output $out"; 
+  SpawnProcess($command, $option);
+  my $command = "mv log $log";
+   SpawnProcess($command, $option);
+ 
+    open (LOG, $log) || die "can't open the log file $log\n";
+    my $mean = 0;
+    my $hetero = 0;
+    #Newly calculated inflation factor lambda for   mean effect part: 2.595353
+    #Newly calculated inflation factor lambda for heterogeneity part: 1.206501
+    while (<LOG>) {
+      if (/^Newly/) {
+	my @data = split;
+	if ($data[6] eq "mean") {
+	  $mean = $data[9];
+	}
+	elsif ($data[6] eq "heterogeneity") {
+	  $hetero = $data[8];
+	}
+      }
+    }
+    if ($mean && $hetero > 0)  {
+      my $command = "java -jar Metasoft.jar -input $ready -mvalue -output $out -lambda_mean $mean -lambda_hetero $hetero";
+      SpawnProcess($command, $option);
+      my $command = "mv log $log";
+      SpawnProcess($command, $option);
+    }
+    else {
+      warn "Can't run Metasoft with correction factors of mean $mean and hetero $hetero\n";
+    }
+  }
+
+    
