@@ -1,0 +1,102 @@
+#!/usr/bin/perl
+use strict;
+
+use Getopt::Std;
+
+our($opt_h, $opt_p, $opt_o, $opt_s, $opt_d, $opt_f, $opt_v, $opt_m, $opt_c, $opt_P);
+
+getopts("hp:f:cm:vP:o:d:s:");
+&usage if $opt_h;
+
+my $fofn = $opt_f;
+my $option = 0;
+if ($opt_v) {
+  $option = 1;
+}
+if ($opt_c) {
+  $option = 2;
+}
+
+my $AllowedPhenotypes = {};
+$AllowedPhenotypes->{'OFA'}++;
+$AllowedPhenotypes->{'EPM-open'}++;
+$AllowedPhenotypes->{'EPM-closed'}++;
+$AllowedPhenotypes->{'activity'}++;
+$AllowedPhenotypes->{'FC-cue'}++;
+$AllowedPhenotypes->{'FC-context'}++;
+
+unless (defined ($opt_d)) {
+die "Give directory containing plink files with -d option\n";
+}
+
+my $plinkdir = $opt_d;
+
+my $suffix = defined ($opt_s) ?$opt_s : "280520";
+
+#unless (exists($AllowedPhenotypes->{$phenotype})) {
+#  print " phenotype must be one of:\n";
+#  foreach my $phen (keys %{$AllowedPhenotypes}) {
+#    print "$phen\n";
+#  }
+#  die &usage;
+#}
+
+my ($Files) = GetFiles($fofn);
+foreach my $file (sort keys %{$Files}){
+  my $kfile = "kin_" . $file;
+  my $command = "gemma -bfile $plinkdir/$file  -gk -o $kfile";
+  SpawnProcess($command, $option);
+  my $grm  =  $kfile . ".cXX.txt";
+  my $out = $file . "_" . $suffix;
+
+my $command = "gemma -bfile $plinkdir/$file -k output/$grm -lmm -o $out";
+  SpawnProcess($command, $option);
+}
+
+sub GetFiles {
+  my  $fofn = shift; 	
+  my $Files = {};
+  open (FOFN, $fofn) || die "Can't open fofn $fofn\n";
+  while (<FOFN>) {
+    chomp;
+    my @data = split;
+    $Files->{$data[0]}++;
+  }
+  return($Files);
+}
+
+sub usage {
+  die "RunGemma.pl -f <fofn of stem names for plink files> -d dir for plink files 
+-c commands only
+-v verbose (print commands and execute)
+-s suffix for output files (default is 060420)
+\n";
+}
+sub SpawnProcess {
+  my ($command) = @_[0];
+  my ($option) = @_[1];
+  if ($option == 2) {
+    print "$command\n";
+  }
+  
+  else {
+    if ($option == 1) {
+      print "$command\n";
+    }
+    open(PROCESS, "$command 2>&1 |")
+      || warn "spawn couldn't open \"$command\": $!\n"
+      && return;
+    
+    my(@output)=<PROCESS>;
+       
+    close (PROCESS);
+    my $status=($? >> 8);
+    
+    if ( $status != 0 ) {
+      die " spawn \"$command\" returned non-zero exit status: @output\n";
+    }
+    
+
+    return (@output);
+  }
+}
